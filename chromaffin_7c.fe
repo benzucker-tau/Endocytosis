@@ -1,0 +1,192 @@
+// chromaffin_7c.fe
+// a surface of revolution.
+// The axis of revolution is the x (!) axis. (?) (for the curve energy method)
+
+
+string
+space_dimension 2
+
+
+view_transforms 1 	//drawing both halves of the tube
+ 1 0 0 
+ 0 -1 0 
+ 0 0 1
+ 
+parameter kappa    	 = 1	 		 								// lipid's bending rigidity
+parameter gamma = 0.5
+
+parameter radius  	 = (kappa/(2*gamma))^0.5   						// radius of tube
+parameter diameter = 3.5
+//parameter plug_radius= 0.01*radius					   				// radius of tube's end  // prev -> 0.01*radius
+parameter plug_radius =0.01
+parameter tubeend =13.50
+parameter first_edge = ((tubeend^2+diameter^2)^0.5)/60
+
+
+parameter Lscale	 =	sqrt(kappa/gamma)							// length scale
+parameter Escale	 = 	kappa										// energy scale
+parameter Fscale	 = 	sqrt(kappa*gamma)							// energy scale
+
+parameter pull_force =  0//(1)*pi/sqrt(2)							// pulling force on plug
+parameter press	 	 =  0											// pressure
+
+parameter J_0 = 0
+
+constraint posrad nonnegative
+formula: y
+
+//constraint plug_r1
+//formula: x-(tubeend+Lscale*0.01)=0
+
+//constraint plug_r2
+//formula: y-plug_radius=0
+
+quantity volume_int info_only modulus press method edge_general_integral	global				// volume integral for pressure input
+scalar_integrand: -pi*x3*y^2 		// [ dfngf x4*ds = dx ] [ y^2 = r^2 ] x3/x4
+
+
+quantity ortho_plug energy modulus 10^4 method edge_general_integral 							// energy modulus 100000 <-> fixed=0
+scalar_integrand: (x4/sqrt(x3^2+x4^2) + 1)^2
+// scalar_integrand: x3^2/(x3^2+x4^2)
+
+quantity tensile_energy energy modulus gamma method edge_scalar_integral 				// energy  --> global	
+scalar_integrand: 2*pi*y	
+
+//quantity bending_energy_tip energy modulus kappa method edge_scalar_integral 				// energy  --> global	
+//scalar_integrand: 0.5*pi*($sin^2phi$)/y	
+
+
+//quantity bending_energy_tip  energy  modulus kappa method vertex_scalar_integral
+//scalar_integrand: pi*(((x-tubeend)^2)/((y-plug_radius)*sqrt((y-plug_radius)^2+(x-tubeend)^2)))*log((y+plug_radius)/(2*plug_radius))
+//scalar_integrand: pi*(((x-tubeend)^2)/(abs(y-plug_radius)*sqrt((y-plug_radius)^2+(x-tubeend)^2)))*abs(log((y+plug_radius)/2)-log(plug_radius))
+//scalar_integrand: pi*(((x-tubeend)^2)/((y-plug_radius)*sqrt((y-plug_radius)^2+(x-tubeend)^2)))*log((y+plug_radius)/(2*plug_radius))
+// this energy is for integrating the bending energy for the last half edge
+// deltaE = pi*kappa*(sin^2(phi)/cos(phi))*log(r_halfedge/r_end)
+//scalar_integrand: //pi*(((x-tubeend)^2)/((y-plug_radius)^2+(x-tubeend)^2))/((y-plug_radius)/sqrt((y-plug_radius)^2+(x-tubeend)^2)))*log((y+plug_radius)/(2*plug_radius))
+
+
+quantity bending_energy energy modulus 2*kappa method sq_mean_curv_cyl global			 	//  The axis of rotation is the x-axis
+
+//quantity pulling_energy fixed=-tubeend method vertex_scalar_integral    //can turn energy (energy modulus pull_force*Fscale) <--> fixed then LAMBDA = F
+//scalar_integrand: -x
+
+define edge attribute 	to_be_refined real  				// indication for refinement
+define vertex attribute total_curvature real  				//
+define vertex attribute gaussian_curvature real  			//
+define vertex attribute median_curvature real  				//
+define vertex attribute parallel_curvature real  			//
+define vertex attribute h_zero real
+
+
+Vertices
+1	0					diameter+first_edge				fixed    	
+2	0					diameter						fixed  
+3  	tubeend/2.1			diameter/1.9					posrad
+4	tubeend			    0.5*(plug_radius+diameter/1.9)	posrad	
+5	tubeend				plug_radius	  					fixed  			// pulling_energy
+
+
+
+
+Edges
+1  1 2		no_refine						
+2  2 3									tensile_energy		posrad
+3  3 4									tensile_energy		posrad
+4  4 5		no_refine					tensile_energy		ortho_plug
+
+  
+
+read
+//set edges const_area off;
+//set const_area info_only;
+set edges tension 0 ;
+set vertex.h_zero J_0/2 ;
+
+r :::= { 'r'; set vertex.h_zero J_0/2 ; }
+zebra 	:= {read "zebra.cmd";};
+sr 		:= {read "srefine_chrom.cmd"; set vertex.h_zero J_0/2 ;};
+dumpit 	:= {read "dumpit.cmd";};
+run  	:= {read "run.cmd";};
+rung  	:= {read "rung.cmd";};
+rungv  	:= {read "rungv.cmd";};
+runh 	:= {read "runh.cmd";};
+runc 	:= {read "runc.cmd";};
+rt		:= {}; // doesnt work here {read "refine_tip.cmd";};
+ref		:= {refine edge where (length > 3*(total_length/edge_count) && id != 1 && id !=4) ; set vertex.h_zero J_0/2 ;}; // refine long edges
+//refpop  := {t 0.05*(total_length/edge_count); ecount:=edge_count; ref; while(ecount<edge_count) do{ecount:=edge_count; ref;};}; // refine long and delete short edges
+refpop  := {delete edge ee where (length<0.05*(total_length/edge_count) && ee.id != 1 && not ee.on_quantity ortho_plug) ; ecount:=edge_count; ref; while(ecount<edge_count) do{ecount:=edge_count; ref;}; set vertex.h_zero J_0/2 ;}; // refine long and delete short edges
+
+in  	:= {read "initial.cmd";};
+in2  	:= {read "initial2.cmd";};
+in3  	:= {read "initial3.cmd";};
+in4  	:= {read "initial4.cmd";};
+in5  	:= {read "initial5.cmd";};
+in6  	:= {read "initial6.cmd";};
+
+s
+q
+
+quiet on;
+r;	
+set vertex.h_zero J_0/2 ;
+
+
+in6;
+//quiet off;
+
+//zebra;
+
+U;
+run;
+
+// if you have long edge ->
+
+{V 100; rung;} 5;
+run
+
+read "smooth.cmd";
+
+conj_grad on;
+previeous_E := total_energy;
+run;
+
+sigmaE := 10^-7 ;
+
+/*
+
+while ((previeous_E-total_energy)/previeous_E > sigmaE) do {
+previeous_E := total_energy;
+
+rung 3;
+rungv;
+rung 2;
+run 2; 
+
+run;
+g 2;
+for (inti :=1 ; inti <= vertex_count ; inti++) { 		// quit if there are large angles
+if (vertex[inti].dihedral > pi/2 ) then { quit; };
+};
+};
+
+previeous_E := total_energy;
+run;
+while ((previeous_E-total_energy)/previeous_E > sigmaE) do {
+previeous_E := total_energy;
+
+rung 3;
+rungv;
+rung 2;
+run 2; 
+
+run;
+g 2;
+for (inti :=1 ; inti <= vertex_count ; inti++) { 		// quit if there are large angles
+if (vertex[inti].dihedral > pi/2 ) then { quit; };
+};
+};
+
+//
+//
+//
+*/
